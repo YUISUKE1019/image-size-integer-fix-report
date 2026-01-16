@@ -24,11 +24,14 @@
       if (!track) return;
       
       let dragging = false;
+      let isDragging = false; // 実際にスワイプしたかどうかのフラグ
       let startX = 0;
+      let startY = 0;
       let curX = 0;
       let index = 0;
       const images = gallery.querySelectorAll('.card-gallery__img, img');
       const count = images.length;
+      const DRAG_THRESHOLD = 8; // スワイプと判定する最小移動距離（px）
       
       if (count <= 1) return; // 画像が1枚以下の場合はスワイプ不要
       
@@ -49,13 +52,24 @@
         track.style.transform = `translateX(-${index * imageWidth}px)`;
       }
       
+      // クリックイベントを抑止する関数
+      function preventClick(e) {
+        if (isDragging) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return false;
+        }
+      }
+      
       // マウスダウン（ドラッグ開始）
       function onMouseDown(e) {
         // 左クリックのみ（右クリックや中クリックは無視）
         if (e.button !== 0) return;
         
         dragging = true;
+        isDragging = false; // リセット
         startX = e.clientX;
+        startY = e.clientY;
         curX = e.clientX;
         track.style.transition = '';
         
@@ -73,9 +87,19 @@
         
         curX = e.clientX;
         const dx = curX - startX;
-        const imageWidth = getImageWidth();
-        const base = -index * imageWidth;
-        track.style.transform = `translateX(${base + dx}px)`;
+        const dy = e.clientY - startY;
+        
+        // 移動距離を計算
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // 一定距離以上動いたらスワイプと判定
+        if (distance > DRAG_THRESHOLD) {
+          isDragging = true;
+          
+          const imageWidth = getImageWidth();
+          const base = -index * imageWidth;
+          track.style.transform = `translateX(${base + dx}px)`;
+        }
         
         // テキスト選択を防ぐ
         e.preventDefault();
@@ -90,10 +114,21 @@
         const imageWidth = getImageWidth();
         const threshold = imageWidth * 0.18;
         
-        if (dx < -threshold && index < count - 1) index++;
-        if (dx > threshold && index > 0) index--;
+        // スワイプした場合のみページ送り処理を実行
+        if (isDragging) {
+          if (dx < -threshold && index < count - 1) index++;
+          if (dx > threshold && index > 0) index--;
+          setActive(index);
+          
+          // クリックイベントを抑止
+          e.preventDefault();
+          e.stopPropagation();
+        }
         
-        setActive(index);
+        // フラグをリセット（少し遅延させてクリックイベントを確実に抑止）
+        setTimeout(() => {
+          isDragging = false;
+        }, 0);
         
         // カーソルを元に戻す
         gallery.style.cursor = '';
@@ -112,6 +147,9 @@
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
       gallery.addEventListener('mouseleave', onMouseLeave);
+      
+      // クリックイベントをcaptureフェーズで抑止（スワイプ時のみ）
+      gallery.addEventListener('click', preventClick, true);
       
       // 初期状態を設定
       setActive(0);
